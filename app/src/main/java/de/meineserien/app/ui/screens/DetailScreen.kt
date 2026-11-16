@@ -100,6 +100,26 @@ fun DetailScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        val isEnded = item.series.status.equals("Ended", ignoreCase = true)
+                        val isCanceled = item.series.status.equals("Canceled", ignoreCase = true)
+                        if (isEnded || isCanceled) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = if (isCanceled)
+                                        "Serie abgesetzt – keine neuen Staffeln"
+                                    else
+                                        "Serie endgültig beendet – keine neuen Staffeln",
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Gesamtfortschritt: $totalPercent %", fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(4.dp))

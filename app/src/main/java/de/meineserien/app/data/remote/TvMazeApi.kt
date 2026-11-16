@@ -172,6 +172,14 @@ class TvMazeApi private constructor(private val service: TmdbRetrofitService) {
         }
     }
 
+    suspend fun getShowStatus(showId: Int): String? {
+        return try {
+            service.getTvDetail(tvId = showId, apiKey = apiKey).status
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     suspend fun getEpisodes(showId: Int): List<TvMazeEpisode> {
         val detail = service.getTvDetail(tvId = showId, apiKey = apiKey)
         val allEpisodes = mutableListOf<TvMazeEpisode>()

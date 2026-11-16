@@ -223,6 +223,23 @@ fun SeriesCard(item: SeriesWithEpisodes, onClick: () -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
+                    val isEnded = item.series.status.equals("Ended", ignoreCase = true) ||
+                        item.series.status.equals("Canceled", ignoreCase = true)
+                    if (isEnded) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "BEENDET",
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     if (item.series.hasNewContentBadge) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(

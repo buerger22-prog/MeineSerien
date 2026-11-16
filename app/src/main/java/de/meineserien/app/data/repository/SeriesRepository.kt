@@ -60,7 +60,7 @@ class SeriesRepository(
                 network = networkName,
                 coverUrl = show.image?.original ?: show.image?.medium,
                 summary = cleanSummary,
-                status = show.status ?: "Unbekannt",
+                status = api.getShowStatus(show.id) ?: show.status ?: "Unbekannt",
                 streamingServices = streamingServices.joinToString(",")
             )
 
@@ -110,6 +110,10 @@ class SeriesRepository(
 
         for (item in allLocal) {
             try {
+                val latestStatus = api.getShowStatus(item.series.id)
+                if (!latestStatus.isNullOrBlank() && latestStatus != item.series.status) {
+                    dao.updateSeries(item.series.copy(status = latestStatus))
+                }
                 val remoteEpisodes = api.getEpisodes(item.series.id)
                     .filter { it.number != null && it.season > 0 }
 
