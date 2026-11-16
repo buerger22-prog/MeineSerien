@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
+import android.view.View
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.clickable
@@ -14,6 +15,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import de.meineserien.app.data.remote.ShowPreviewDetails
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -242,23 +245,14 @@ fun SearchSheet(
                         Text(details.overview, style = MaterialTheme.typography.bodyMedium)
                         Spacer(modifier = Modifier.height(14.dp))
                         if (details.trailerYoutubeKey != null) {
-                            if (playTrailerInApp) {
-                                EmbeddedYoutubePlayer(videoKey = details.trailerYoutubeKey)
-                                Spacer(modifier = Modifier.height(6.dp))
-                                TextButton(
-                                    onClick = { playTrailerInApp = false },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("Video-Player schließen") }
-                            } else {
-                                Button(
-                                    onClick = { playTrailerInApp = true },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Trailer hier in der App abspielen")
-                                }
+                            Button(
+                                onClick = { playTrailerInApp = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Trailer hier in der App abspielen")
                             }
                         } else {
                             OutlinedButton(
@@ -300,6 +294,30 @@ fun SearchSheet(
                 TextButton(onClick = { previewShow = null }) { Text("Schließen") }
             }
         )
+    }
+
+    if (playTrailerInApp && previewDetails?.trailerYoutubeKey != null) {
+        Dialog(
+            onDismissRequest = { playTrailerInApp = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = androidx.compose.ui.graphics.Color.Black
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    EmbeddedYoutubePlayer(videoKey = previewDetails!!.trailerYoutubeKey!!)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = { playTrailerInApp = false }) {
+                        Text("Trailer schließen")
+                    }
+                }
+            }
+        }
     }
 
     showPendingProviderSelection?.let { chosenShow ->
@@ -344,22 +362,26 @@ fun SearchSheet(
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun EmbeddedYoutubePlayer(videoKey: String) {
-    val embedUrl = "https://www.youtube-nocookie.com/embed/$videoKey?autoplay=1&playsinline=1&rel=0"
-    val html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">" +
-        "<style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}iframe{width:100%;height:100%;border:0}</style></head>" +
-        "<body><iframe src=\"$embedUrl\" allow=\"autoplay; encrypted-media; fullscreen\" allowfullscreen></iframe></body></html>"
+    val embedUrl = "https://www.youtube.com/embed/$videoKey?autoplay=1&playsinline=1&rel=0&modestbranding=1"
     AndroidView(
         factory = { ctx ->
             WebView(ctx).apply {
+                setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                setBackgroundColor(android.graphics.Color.BLACK)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                settings.loadWithOverviewMode = true
+                settings.useWideViewPort = true
                 settings.mediaPlaybackRequiresUserGesture = false
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                settings.userAgentString = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                 webChromeClient = WebChromeClient()
                 webViewClient = WebViewClient()
-                loadDataWithBaseURL("https://www.youtube-nocookie.com", html, "text/html", "UTF-8", null)
+                loadUrl(embedUrl)
             }
         },
-        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp))
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
     )
 }
