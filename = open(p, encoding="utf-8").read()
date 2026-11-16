@@ -1,0 +1,247 @@
+[1mdiff --git a/app/src/main/java/de/meineserien/app/data/remote/TvMazeApi.kt b/app/src/main/java/de/meineserien/app/data/remote/TvMazeApi.kt[m
+[1mindex e22ea56..cf0e2cd 100644[m
+[1m--- a/app/src/main/java/de/meineserien/app/data/remote/TvMazeApi.kt[m
+[1m+++ b/app/src/main/java/de/meineserien/app/data/remote/TvMazeApi.kt[m
+[36m@@ -125,6 +125,9 @@[m [mprivate interface TmdbRetrofitService {[m
+         @Query("language") language: String = "de-DE"[m
+     ): TmdbSearchResponse[m
+ [m
+[32m+[m[32m    @GET("tv/{tv_id}/videos")[m
+[32m+[m[32m    suspend fun getTvVideos(@Path("tv_id") tvId: Int, @Query("api_key") apiKey: String, @Query("language") language: String = "de-DE"): TmdbVideosResponse[m
+[32m+[m
+     @GET("tv/{tv_id}/watch/providers")[m
+     suspend fun getWatchProviders([m
+         @Path("tv_id") tvId: Int,[m
+[36m@@ -201,6 +204,47 @@[m [mclass TvMazeApi private constructor(private val service: TmdbRetrofitService) {[m
+         }[m
+     }[m
+ [m
+[32m+[m[32m    suspend fun getShowPreviewDetails(show: TvMazeShow): ShowPreviewDetails {[m
+[32m+[m[32m        var overview = show.summary?.replace(Regex("<.*?>"), "")?.trim().orEmpty()[m
+[32m+[m[32m        var statusText = "Status unbekannt"[m
+[32m+[m[32m        var seasonsCount = 0[m
+[32m+[m[32m        try {[m
+[32m+[m[32m            val dDe = service.getTvDetail(tvId = show.id, apiKey = apiKey, language = "de-DE")[m
+[32m+[m[32m            if (overview.isBlank() && !dDe.overview.isNullOrBlank()) overview = dDe.overview.trim()[m
+[32m+[m[32m            seasonsCount = dDe.seasons.count { it.seasonNumber > 0 }[m
+[32m+[m[32m            statusText = when (dDe.status?.lowercase()) {[m
+[32m+[m[32m                "ended" -> "Serie beendet"[m
+[32m+[m[32m                "canceled" -> "Serie abgesetzt"[m
+[32m+[m[32m                "returning series" -> "Läuft noch"[m
+[32m+[m[32m                "in production" -> "In Produktion"[m
+[32m+[m[32m                else -> dDe.status ?: "Status unbekannt"[m
+[32m+[m[32m            }[m
+[32m+[m[32m            if (overview.isBlank()) {[m
+[32m+[m[32m                val dEn = service.getTvDetail(tvId = show.id, apiKey = apiKey, language = "en-US")[m
+[32m+[m[32m                if (!dEn.overview.isNullOrBlank()) overview = dEn.overview.trim()[m
+[32m+[m[32m            }[m
+[32m+[m[32m        } catch (_: Exception) {}[m
+[32m+[m[32m        var trailerKey: String? = null[m
+[32m+[m[32m        try {[m
+[32m+[m[32m            val vDe = service.getTvVideos(tvId = show.id, apiKey = apiKey, language = "de-DE").results[m
+[32m+[m[32m            val ytDe = vDe.firstOrNull { it.site.equals("YouTube", true) && it.type.equals("Trailer", true) } ?: vDe.firstOrNull { it.site.equals("YouTube", true) }[m
+[32m+[m[32m            if (ytDe != null) trailerKey = ytDe.key else {[m
+[32m+[m[32m                val vEn = service.getTvVideos(tvId = show.id, apiKey = apiKey, language = "en-US").results[m
+[32m+[m[32m                val ytEn = vEn.firstOrNull { it.site.equals("YouTube", true) && it.type.equals("Trailer", true) } ?: vEn.firstOrNull { it.site.equals("YouTube", true) }[m
+[32m+[m[32m                if (ytEn != null) trailerKey = ytEn.key[m
+[32m+[m[32m            }[m
+[32m+[m[32m        } catch (_: Exception) {}[m
+[32m+[m[32m        return ShowPreviewDetails([m
+[32m+[m[32m            title = show.name,[m
+[32m+[m[32m            year = show.premiered?.take(4) ?: "—",[m
+[32m+[m[32m            statusText = statusText,[m
+[32m+[m[32m            seasonsCount = seasonsCount,[m
+[32m+[m[32m            overview = overview.ifBlank { "Für diese Serie liegt aktuell keine Beschreibung vor." },[m
+[32m+[m[32m            posterUrl = show.image?.original ?: show.image?.medium,[m
+[32m+[m[32m            trailerYoutubeKey = trailerKey[m
+[32m+[m[32m        )[m
+[32m+[m[32m    }[m
+[32m+[m
+     suspend fun getShowStatus(showId: Int): String? {[m
+         return try {[m
+             service.getTvDetail(tvId = showId, apiKey = apiKey).status[m
+[1mdiff --git a/app/src/main/java/de/meineserien/app/ui/SeriesViewModel.kt b/app/src/main/java/de/meineserien/app/ui/SeriesViewModel.kt[m
+[1mindex f202052..b38e57c 100644[m
+[1m--- a/app/src/main/java/de/meineserien/app/ui/SeriesViewModel.kt[m
+[1m+++ b/app/src/main/java/de/meineserien/app/ui/SeriesViewModel.kt[m
+[36m@@ -78,6 +78,10 @@[m [mclass SeriesViewModel(application: Application) : AndroidViewModel(application)[m
+         _selectedProviderFilter.value = if (_selectedProviderFilter.value == provider) null else provider[m
+     }[m
+ [m
+[32m+[m[32m    suspend fun loadShowPreview(show: TvMazeShow): de.meineserien.app.data.remote.ShowPreviewDetails {[m
+[32m+[m[32m        return de.meineserien.app.data.remote.TvMazeApi.create().getShowPreviewDetails(show)[m
+[32m+[m[32m    }[m
+[32m+[m
+     suspend fun detectProvidersForShow(showId: Int): List<String> {[m
+         return de.meineserien.app.data.remote.TvMazeApi.create().getGermanProviders(showId)[m
+     }[m
+[1mdiff --git a/app/src/main/java/de/meineserien/app/ui/screens/SearchSheet.kt b/app/src/main/java/de/meineserien/app/ui/screens/SearchSheet.kt[m
+[1mindex b726974..ce79056 100644[m
+[1m--- a/app/src/main/java/de/meineserien/app/ui/screens/SearchSheet.kt[m
+[1m+++ b/app/src/main/java/de/meineserien/app/ui/screens/SearchSheet.kt[m
+[36m@@ -1,7 +1,22 @@[m
+ package de.meineserien.app.ui.screens[m
+ [m
+[32m+[m[32mimport android.annotation.SuppressLint[m
+[32m+[m[32mimport android.content.Intent[m
+[32m+[m[32mimport android.net.Uri[m
+[32m+[m[32mimport android.webkit.WebChromeClient[m
+[32m+[m[32mimport android.webkit.WebSettings[m
+[32m+[m[32mimport android.webkit.WebView[m
+[32m+[m[32mimport android.webkit.WebViewClient[m
+[32m+[m[32mimport androidx.compose.foundation.clickable[m
+[32m+[m[32mimport androidx.compose.foundation.rememberScrollState[m
+[32m+[m[32mimport androidx.compose.foundation.verticalScroll[m
+[32m+[m[32mimport androidx.compose.material.icons.filled.PlayArrow[m
+[32m+[m[32mimport androidx.compose.ui.platform.LocalContext[m
+[32m+[m[32mimport androidx.compose.ui.viewinterop.AndroidView[m
+[32m+[m[32mimport de.meineserien.app.data.remote.ShowPreviewDetails[m
+ import androidx.compose.foundation.background[m
+ import androidx.compose.foundation.layout.*[m
+[32m+[m[32mimport androidx.compose.foundation.layout.aspectRatio[m
+ import androidx.compose.foundation.lazy.LazyColumn[m
+ import androidx.compose.foundation.lazy.items[m
+ import androidx.compose.foundation.shape.RoundedCornerShape[m
+[36m@@ -36,6 +51,11 @@[m [mfun SearchSheet([m
+     var showPendingProviderSelection by remember { mutableStateOf<TvMazeShow?>(null) }[m
+     var selectedProviders by remember { mutableStateOf(emptySet<String>()) }[m
+     var isDetectingProviders by remember { mutableStateOf(false) }[m
+[32m+[m[32m    var previewShow by remember { mutableStateOf<TvMazeShow?>(null) }[m
+[32m+[m[32m    var previewDetails by remember { mutableStateOf<ShowPreviewDetails?>(null) }[m
+[32m+[m[32m    var isLoadingPreview by remember { mutableStateOf(false) }[m
+[32m+[m[32m    var playTrailerInApp by remember { mutableStateOf(false) }[m
+[32m+[m[32m    val context = LocalContext.current[m
+     val scope = rememberCoroutineScope()[m
+ [m
+     ModalBottomSheet(onDismissRequest = onDismiss) {[m
+[36m@@ -97,6 +117,16 @@[m [mfun SearchSheet([m
+             ) {[m
+                 items(results, key = { it.id }) { show ->[m
+                     Card([m
+[32m+[m[32m                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable {[m
+[32m+[m[32m                            previewShow = show[m
+[32m+[m[32m                            previewDetails = null[m
+[32m+[m[32m                            playTrailerInApp = false[m
+[32m+[m[32m                            isLoadingPreview = true[m
+[32m+[m[32m                            scope.launch {[m
+[32m+[m[32m                                previewDetails = viewModel.loadShowPreview(show)[m
+[32m+[m[32m                                isLoadingPreview = false[m
+[32m+[m[32m                            }[m
+[32m+[m[32m                        },[m
+                         shape = RoundedCornerShape(16.dp),[m
+                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)[m
+                     ) {[m
+[36m@@ -159,6 +189,88 @@[m [mfun SearchSheet([m
+         }[m
+     }[m
+ [m
+[32m+[m[32m    previewShow?.let { targetShow ->[m
+[32m+[m[32m        AlertDialog([m
+[32m+[m[32m            onDismissRequest = { previewShow = null },[m
+[32m+[m[32m            title = { Text(text = targetShow.name, fontWeight = FontWeight.Bold) },[m
+[32m+[m[32m            text = {[m
+[32m+[m[32m                if (isLoadingPreview || previewDetails == null) {[m
+[32m+[m[32m                    Box(modifier = Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }[m
+[32m+[m[32m                } else {[m
+[32m+[m[32m                    val details = previewDetails!![m
+[32m+[m[32m                    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {[m
+[32m+[m[32m                        Row(verticalAlignment = Alignment.Top) {[m
+[32m+[m[32m                            AsyncImage([m
+[32m+[m[32m                                model = details.posterUrl,[m
+[32m+[m[32m                                contentDescription = details.title,[m
+[32m+[m[32m                                contentScale = ContentScale.Crop,[m
+[32m+[m[32m                                modifier = Modifier.width(96.dp).height(140.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)[m
+[32m+[m[32m                            )[m
+[32m+[m[32m                            Spacer(modifier = Modifier.width(12.dp))[m
+[32m+[m[32m                            Column(modifier = Modifier.weight(1f)) {[m
+[32m+[m[32m                                Text("Start: ${details.year}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)[m
+[32m+[m[32m                                if (details.seasonsCount > 0) {[m
+[32m+[m[32m                                    Spacer(modifier = Modifier.height(4.dp))[m
+[32m+[m[32m                                    Text("${details.seasonsCount} Staffel(n)", style = MaterialTheme.typography.bodySmall)[m
+[32m+[m[32m                                }[m
+[32m+[m[32m                                Spacer(modifier = Modifier.height(4.dp))[m
+[32m+[m[32m                                Text(details.statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)[m
+[32m+[m[32m                            }[m
+[32m+[m[32m                        }[m
+[32m+[m[32m                        Spacer(modifier = Modifier.height(12.dp))[m
+[32m+[m[32m                        Text(details.overview, style = MaterialTheme.typography.bodyMedium)[m
+[32m+[m[32m                        Spacer(modifier = Modifier.height(14.dp))[m
+[32m+[m[32m                        if (details.trailerYoutubeKey != null) {[m
+[32m+[m[32m                            if (playTrailerInApp) {[m
+[32m+[m[32m                                EmbeddedYoutubePlayer(videoKey = details.trailerYoutubeKey)[m
+[32m+[m[32m                                Spacer(modifier = Modifier.height(6.dp))[m
+[32m+[m[32m                                TextButton(onClick = { playTrailerInApp = false }, modifier = Modifier.fillMaxWidth()) { Text("Video-Player schließen") }[m
+[32m+[m[32m                            } else {[m
+[32m+[m[32m                                Button(onClick = { playTrailerInApp = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {[m
+[32m+[m[32m                                    Icon(Icons.Default.PlayArrow, contentDescription = null)[m
+[32m+[m[32m                                    Spacer(modifier = Modifier.width(6.dp))[m
+[32m+[m[32m                                    Text("Trailer hier in der App abspielen")[m
+[32m+[m[32m                                }[m
+[32m+[m[32m                            }[m
+[32m+[m[32m                        } else {[m
+[32m+[m[32m                            OutlinedButton([m
+[32m+[m[32m                                onClick = {[m
+[32m+[m[32m                                    val q = Uri.encode("${details.title} Trailer Deutsch")[m
+[32m+[m[32m                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=$q")))[m
+[32m+[m[32m                                },[m
+[32m+[m[32m                                modifier = Modifier.fillMaxWidth(),[m
+[32m+[m[32m                                shape = RoundedCornerShape(12.dp)[m
+[32m+[m[32m                            ) {[m
+[32m+[m[32m                                Icon(Icons.Default.PlayArrow, contentDescription = null)[m
+[32m+[m[32m                                Spacer(modifier = Modifier.width(6.dp))[m
+[32m+[m[32m                                Text("Trailer auf YouTube suchen")[m
+[32m+[m[32m                            }[m
+[32m+[m[32m                        }[m
+[32m+[m[32m                    }[m
+[32m+[m[32m                }[m
+[32m+[m[32m            },[m
+[32m+[m[32m            confirmButton = {[m
+[32m+[m[32m                Button(onClick = {[m
+[32m+[m[32m                    val chosen = targetShow[m
+[32m+[m[32m                    previewShow = null[m
+[32m+[m[32m                    selectedProviders = emptySet()[m
+[32m+[m[32m                    isDetectingProviders = true[m
+[32m+[m[32m                    showPendingProviderSelection = chosen[m
+[32m+[m[32m                    scope.launch {[m
+[32m+[m[32m                        val detected = viewModel.detectProvidersForShow(chosen.id)[m
+[32m+[m[32m                        selectedProviders = detected.toSet()[m
+[32m+[m[32m                        isDetectingProviders = false[m
+[32m+[m[32m                    }[m
+[32m+[m[32m                }) {[m
+[32m+[m[32m                    Icon(Icons.Default.Add, contentDescription = null)[m
+[32m+[m[32m                    Spacer(modifier = Modifier.width(4.dp))[m
+[32m+[m[32m                    Text("Merken")[m
+[32m+[m[32m                }[m
+[32m+[m[32m            },[m
+[32m+[m[32m            dismissButton = { TextButton(onClick = { previewShow = null }) { Text("Schließen") } }[m
+[32m+[m[32m        )[m
+[32m+[m[32m    }[m
+[32m+[m
+     showPendingProviderSelection?.let { chosenShow ->[m
+         AlertDialog([m
+             onDismissRequest = { showPendingProviderSelection = null },[m
+[36m@@ -197,3 +309,24 @@[m [mfun SearchSheet([m
+         )[m
+     }[m
+ }[m
+[32m+[m
+[32m+[m
+[32m+[m[32m@SuppressLint("SetJavaScriptEnabled")[m
+[32m+[m[32m@Composable[m
+[32m+[m[32mfun EmbeddedYoutubePlayer(videoKey: String) {[m
+[32m+[m[32m    val html = "<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}iframe{width:100%;height:100%;border:0}</style></head><body><iframe src="https://www.youtube-nocookie.com/embed/$videoKey?autoplay=1&playsinline=1&rel=0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></body></html>"[m
+[32m+[m[32m    AndroidView([m
+[32m+[m[32m        factory = { ctx ->[m
+[32m+[m[32m            WebView(ctx).apply {[m
+[32m+[m[32m                settings.javaScriptEnabled = true[m
+[32m+[m[32m                settings.domStorageEnabled = true[m
+[32m+[m[32m                settings.mediaPlaybackRequiresUserGesture = false[m
+[32m+[m[32m                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW[m
+[32m+[m[32m                webChromeClient = WebChromeClient()[m
+[32m+[m[32m                webViewClient = WebViewClient()[m
+[32m+[m[32m                loadDataWithBaseURL("https://www.youtube-nocookie.com", html, "text/html", "UTF-8", null)[m
+[32m+[m[32m            }[m
+[32m+[m[32m        },[m
+[32m+[m[32m        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp))[m
+[32m+[m[32m    )[m
+[32m+[m[32m}[m

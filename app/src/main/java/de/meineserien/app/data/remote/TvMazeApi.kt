@@ -95,6 +95,19 @@ private data class TmdbProviderItem(
     @SerializedName("provider_name") val providerName: String
 )
 
+data class ShowPreviewDetails(
+    val title: String,
+    val year: String,
+    val statusText: String,
+    val seasonsCount: Int,
+    val overview: String,
+    val posterUrl: String?,
+    val trailerYoutubeKey: String? = null
+)
+
+private data class TmdbVideosResponse(val results: List<TmdbVideoItem> = emptyList())
+private data class TmdbVideoItem(val key: String, val site: String, val type: String)
+
 private interface TmdbRetrofitService {
     @GET("search/tv")
     suspend fun searchTv(
@@ -124,6 +137,9 @@ private interface TmdbRetrofitService {
         @Query("api_key") apiKey: String,
         @Query("language") language: String = "de-DE"
     ): TmdbSearchResponse
+
+    @GET("tv/{tv_id}/videos")
+    suspend fun getTvVideos(@Path("tv_id") tvId: Int, @Query("api_key") apiKey: String, @Query("language") language: String = "de-DE"): TmdbVideosResponse
 
     @GET("tv/{tv_id}/watch/providers")
     suspend fun getWatchProviders(
@@ -199,6 +215,51 @@ class TvMazeApi private constructor(private val service: TmdbRetrofitService) {
         } catch (_: Exception) {
             emptyList()
         }
+    }
+
+    suspend fun getShowPreviewDetails(show: TvMazeShow): ShowPreviewDetails {
+        var overview = show.summary?.replace(Regex("<.*?>"), "")?.trim().orEmpty()
+        var statusText = "Status unbekannt"
+        var seasonsCount = 0
+        try {
+            val dDe = service.getTvDetail(tvId = show.id, apiKey = apiKey, language = "de-DE")
+            if (overview.isBlank() && !dDe.overview.isNullOrBlank()) overview = dDe.overview.trim()
+            seasonsCount = dDe.seasons.count { it.seasonNumber > 0 }
+            statusText = when (dDe.status?.lowercase()) {
+                "ended" -> "Serie beendet"
+                "canceled" -> "Serie abgesetzt"
+                "returning series" -> "Läuft noch"
+                "in production" -> "In Produktion"
+                else -> dDe.status ?: "Status unbekannt"
+            }
+            if (overview.isBlank()) {
+                val dEn = service.getTvDetail(tvId = show.id, apiKey = apiKey, language = "en-US")
+                if (!dEn.overview.isNullOrBlank()) overview = dEn.overview.trim()
+            }
+        } catch (_: Exception) {}
+        var trailerKey: String? = null
+        try {
+            val vDe = service.getTvVideos(tvId = show.id, apiKey = apiKey, language = "de-DE").results
+            val ytDe = vDe.firstOrNull { it.site.equals("YouTube", true) && it.type.equals("Trailer", true) }
+                ?: vDe.firstOrNull { it.site.equals("YouTube", true) }
+            if (ytDe != null) {
+                trailerKey = ytDe.key
+            } else {
+                val vEn = service.getTvVideos(tvId = show.id, apiKey = apiKey, language = "en-US").results
+                val ytEn = vEn.firstOrNull { it.site.equals("YouTube", true) && it.type.equals("Trailer", true) }
+                    ?: vEn.firstOrNull { it.site.equals("YouTube", true) }
+                if (ytEn != null) trailerKey = ytEn.key
+            }
+        } catch (_: Exception) {}
+        return ShowPreviewDetails(
+            title = show.name,
+            year = show.premiered?.take(4) ?: "—",
+            statusText = statusText,
+            seasonsCount = seasonsCount,
+            overview = overview.ifBlank { "Für diese Serie liegt aktuell keine Beschreibung vor." },
+            posterUrl = show.image?.original ?: show.image?.medium,
+            trailerYoutubeKey = trailerKey
+        )
     }
 
     suspend fun getShowStatus(showId: Int): String? {

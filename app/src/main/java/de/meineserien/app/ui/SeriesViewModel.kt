@@ -78,6 +78,10 @@ class SeriesViewModel(application: Application) : AndroidViewModel(application) 
         _selectedProviderFilter.value = if (_selectedProviderFilter.value == provider) null else provider
     }
 
+    suspend fun loadShowPreview(show: TvMazeShow): de.meineserien.app.data.remote.ShowPreviewDetails {
+        return de.meineserien.app.data.remote.TvMazeApi.create().getShowPreviewDetails(show)
+    }
+
     suspend fun detectProvidersForShow(showId: Int): List<String> {
         return de.meineserien.app.data.remote.TvMazeApi.create().getGermanProviders(showId)
     }

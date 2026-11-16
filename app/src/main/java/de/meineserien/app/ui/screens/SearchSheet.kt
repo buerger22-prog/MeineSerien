@@ -1,5 +1,20 @@
 package de.meineserien.app.ui.screens
 
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import de.meineserien.app.data.remote.ShowPreviewDetails
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,6 +51,11 @@ fun SearchSheet(
     var showPendingProviderSelection by remember { mutableStateOf<TvMazeShow?>(null) }
     var selectedProviders by remember { mutableStateOf(emptySet<String>()) }
     var isDetectingProviders by remember { mutableStateOf(false) }
+    var previewShow by remember { mutableStateOf<TvMazeShow?>(null) }
+    var previewDetails by remember { mutableStateOf<ShowPreviewDetails?>(null) }
+    var isLoadingPreview by remember { mutableStateOf(false) }
+    var playTrailerInApp by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -97,6 +117,19 @@ fun SearchSheet(
             ) {
                 items(results, key = { it.id }) { show ->
                     Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable {
+                                previewShow = show
+                                previewDetails = null
+                                playTrailerInApp = false
+                                isLoadingPreview = true
+                                scope.launch {
+                                    previewDetails = viewModel.loadShowPreview(show)
+                                    isLoadingPreview = false
+                                }
+                            },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
@@ -159,6 +192,116 @@ fun SearchSheet(
         }
     }
 
+    previewShow?.let { targetShow ->
+        AlertDialog(
+            onDismissRequest = { previewShow = null },
+            title = { Text(text = targetShow.name, fontWeight = FontWeight.Bold) },
+            text = {
+                if (isLoadingPreview || previewDetails == null) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(140.dp),
+                        contentAlignment = Alignment.Center
+                    ) { CircularProgressIndicator() }
+                } else {
+                    val details = previewDetails!!
+                    Column(
+                        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    ) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            AsyncImage(
+                                model = details.posterUrl,
+                                contentDescription = details.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .width(96.dp)
+                                    .height(140.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surface)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Start: ${details.year}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                if (details.seasonsCount > 0) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("${details.seasonsCount} Staffel(n)", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = details.statusText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(details.overview, style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(14.dp))
+                        if (details.trailerYoutubeKey != null) {
+                            if (playTrailerInApp) {
+                                EmbeddedYoutubePlayer(videoKey = details.trailerYoutubeKey)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                TextButton(
+                                    onClick = { playTrailerInApp = false },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Video-Player schließen") }
+                            } else {
+                                Button(
+                                    onClick = { playTrailerInApp = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Trailer hier in der App abspielen")
+                                }
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = {
+                                    val q = Uri.encode("${details.title} Trailer Deutsch")
+                                    val url = "https://www.youtube.com/results?search_query=$q"
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Trailer auf YouTube suchen")
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val chosen = targetShow
+                    previewShow = null
+                    selectedProviders = emptySet()
+                    isDetectingProviders = true
+                    showPendingProviderSelection = chosen
+                    scope.launch {
+                        val detected = viewModel.detectProvidersForShow(chosen.id)
+                        selectedProviders = detected.toSet()
+                        isDetectingProviders = false
+                    }
+                }) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Merken")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { previewShow = null }) { Text("Schließen") }
+            }
+        )
+    }
+
     showPendingProviderSelection?.let { chosenShow ->
         AlertDialog(
             onDismissRequest = { showPendingProviderSelection = null },
@@ -196,4 +339,27 @@ fun SearchSheet(
             }
         )
     }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun EmbeddedYoutubePlayer(videoKey: String) {
+    val embedUrl = "https://www.youtube-nocookie.com/embed/$videoKey?autoplay=1&playsinline=1&rel=0"
+    val html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">" +
+        "<style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}iframe{width:100%;height:100%;border:0}</style></head>" +
+        "<body><iframe src=\"$embedUrl\" allow=\"autoplay; encrypted-media; fullscreen\" allowfullscreen></iframe></body></html>"
+    AndroidView(
+        factory = { ctx ->
+            WebView(ctx).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.mediaPlaybackRequiresUserGesture = false
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                webChromeClient = WebChromeClient()
+                webViewClient = WebViewClient()
+                loadDataWithBaseURL("https://www.youtube-nocookie.com", html, "text/html", "UTF-8", null)
+            }
+        },
+        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp))
+    )
 }
