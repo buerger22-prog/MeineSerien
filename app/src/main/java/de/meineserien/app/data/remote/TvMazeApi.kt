@@ -40,7 +40,6 @@ data class TvMazeEpisode(
     val airdate: String?
 )
 
-// Interne TMDB-Modelle (de-DE)
 private data class TmdbSearchResponse(
     val results: List<TmdbShowItem> = emptyList()
 )
@@ -84,6 +83,18 @@ private data class TmdbEpisodeItem(
     @SerializedName("air_date") val airDate: String?
 )
 
+private data class TmdbWatchProvidersResponse(
+    val results: Map<String, TmdbCountryProviders>? = null
+)
+
+private data class TmdbCountryProviders(
+    val flatrate: List<TmdbProviderItem>? = null
+)
+
+private data class TmdbProviderItem(
+    @SerializedName("provider_name") val providerName: String
+)
+
 private interface TmdbRetrofitService {
     @GET("search/tv")
     suspend fun searchTv(
@@ -106,6 +117,12 @@ private interface TmdbRetrofitService {
         @Query("api_key") apiKey: String,
         @Query("language") language: String = "de-DE"
     ): TmdbSeasonDetail
+
+    @GET("tv/{tv_id}/watch/providers")
+    suspend fun getWatchProviders(
+        @Path("tv_id") tvId: Int,
+        @Query("api_key") apiKey: String
+    ): TmdbWatchProvidersResponse
 }
 
 class TvMazeApi private constructor(private val service: TmdbRetrofitService) {
@@ -132,6 +149,29 @@ class TvMazeApi private constructor(private val service: TmdbRetrofitService) {
         }
     }
 
+    suspend fun getGermanProviders(showId: Int): List<String> {
+        return try {
+            val response = service.getWatchProviders(tvId = showId, apiKey = apiKey)
+            val deList = response.results?.get("DE")?.flatrate.orEmpty()
+            val mapped = deList.mapNotNull { provider ->
+                val raw = provider.providerName.lowercase()
+                when {
+                    "netflix" in raw -> "Netflix"
+                    "amazon" in raw || "prime" in raw -> "Amazon Prime Video"
+                    "disney" in raw -> "Disney+"
+                    "wow" in raw || "sky" in raw -> "WOW"
+                    "apple" in raw -> "Apple TV+"
+                    "paramount" in raw -> "Paramount+"
+                    "rtl" in raw -> "RTL+"
+                    else -> null
+                }
+            }.distinct()
+            mapped
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     suspend fun getEpisodes(showId: Int): List<TvMazeEpisode> {
         val detail = service.getTvDetail(tvId = showId, apiKey = apiKey)
         val allEpisodes = mutableListOf<TvMazeEpisode>()
@@ -155,7 +195,6 @@ class TvMazeApi private constructor(private val service: TmdbRetrofitService) {
                     )
                 }
             } catch (_: Exception) {
-                // Einzelne noch leere/angekündigte Staffeln überspringen
             }
         }
         return allEpisodes

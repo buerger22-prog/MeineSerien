@@ -31,7 +31,9 @@ fun SearchSheet(
     val results by viewModel.remoteSearchResults.collectAsState()
     val isLoading by viewModel.isSearchingRemote.collectAsState()
     var showPendingProviderSelection by remember { mutableStateOf<TvMazeShow?>(null) }
-    var selectedProviders by remember { mutableStateOf(setOf("Netflix")) }
+    var selectedProviders by remember { mutableStateOf(emptySet<String>()) }
+    var isDetectingProviders by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -109,7 +111,13 @@ fun SearchSheet(
                             }
                             Button(onClick = {
                                 selectedProviders = emptySet()
+                                isDetectingProviders = true
                                 showPendingProviderSelection = show
+                                kotlinx.coroutines.MainScope().launch {
+                                    val detected = viewModel.detectProvidersForShow(show.id)
+                                    selectedProviders = detected.toSet()
+                                    isDetectingProviders = false
+                                }
                             }) {
                                 Icon(Icons.Default.Add, contentDescription = null)
                                 Spacer(modifier = Modifier.width(4.dp))

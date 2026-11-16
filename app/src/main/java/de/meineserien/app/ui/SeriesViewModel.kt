@@ -19,6 +19,7 @@ val STREAMING_PROVIDERS = listOf(
     "WOW",
     "Apple TV+",
     "Paramount+",
+    "RTL+",
     "Andere Anbieter"
 )
 
@@ -75,6 +76,10 @@ class SeriesViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setProviderFilter(provider: String?) {
         _selectedProviderFilter.value = if (_selectedProviderFilter.value == provider) null else provider
+    }
+
+    suspend fun detectProvidersForShow(showId: Int): List<String> {
+        return de.meineserien.app.data.remote.TvMazeApi.create().getGermanProviders(showId)
     }
 
     fun searchOnline(query: String) {
