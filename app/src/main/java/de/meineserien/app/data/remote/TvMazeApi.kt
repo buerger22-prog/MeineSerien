@@ -118,6 +118,13 @@ private interface TmdbRetrofitService {
         @Query("language") language: String = "de-DE"
     ): TmdbSeasonDetail
 
+    @GET("tv/{tv_id}/recommendations")
+    suspend fun getRecommendations(
+        @Path("tv_id") tvId: Int,
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "de-DE"
+    ): TmdbSearchResponse
+
     @GET("tv/{tv_id}/watch/providers")
     suspend fun getWatchProviders(
         @Path("tv_id") tvId: Int,
@@ -146,6 +153,28 @@ class TvMazeApi private constructor(private val service: TmdbRetrofitService) {
                     image = TvMazeImage(medium = posterMedium, original = posterOriginal)
                 )
             )
+        }
+    }
+
+    suspend fun getRecommendations(showId: Int): List<TvMazeShow> {
+        return try {
+            val response = service.getRecommendations(tvId = showId, apiKey = apiKey)
+            response.results.map { item ->
+                val posterMedium = item.posterPath?.let { "https://image.tmdb.org/t/p/w342$it" }
+                val posterOriginal = item.posterPath?.let { "https://image.tmdb.org/t/p/w780$it" }
+                TvMazeShow(
+                    id = item.id,
+                    name = item.name?.takeIf { it.isNotBlank() } ?: item.originalName ?: "Unbekannt",
+                    premiered = item.firstAirDate,
+                    status = null,
+                    summary = item.overview,
+                    network = TvMazeNetwork("TMDB"),
+                    webChannel = null,
+                    image = TvMazeImage(medium = posterMedium, original = posterOriginal)
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 

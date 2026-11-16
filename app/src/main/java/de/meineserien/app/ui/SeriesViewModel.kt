@@ -82,6 +82,22 @@ class SeriesViewModel(application: Application) : AndroidViewModel(application) 
         return de.meineserien.app.data.remote.TvMazeApi.create().getGermanProviders(showId)
     }
 
+    fun loadRecommendations() {
+        viewModelScope.launch {
+            _isSearchingRemote.value = true
+            val res = repo.getRecommendationsBasedOnSaved()
+            _isSearchingRemote.value = false
+            res.onSuccess { list ->
+                if (list.isEmpty()) {
+                    _statusMessage.value = "Speichere zuerst mindestens eine Serie, um Vorschläge zu erhalten."
+                }
+                _remoteSearchResults.value = list
+            }.onFailure {
+                _statusMessage.value = "Vorschläge konnten nicht geladen werden. Bitte Verbindung prüfen."
+            }
+        }
+    }
+
     fun searchOnline(query: String) {
         if (query.isBlank()) {
             _remoteSearchResults.value = emptyList()

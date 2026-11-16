@@ -22,6 +22,32 @@ class SeriesRepository(
     fun observeAllSeries(): Flow<List<SeriesWithEpisodes>> = dao.observeAllSeriesWithEpisodes()
     fun observeSeriesDetail(id: Int): Flow<SeriesWithEpisodes?> = dao.observeSeriesDetail(id)
 
+    suspend fun getRecommendationsBasedOnSaved(): Result<List<TvMazeShow>> {
+        return try {
+            val saved = dao.getAllSeriesOnce()
+            if (saved.isEmpty()) {
+                return Result.success(emptyList())
+            }
+            val savedIds = saved.map { it.series.id }.toSet()
+            val seeds = saved
+                .sortedByDescending { it.lastWatchedEpisode?.watchedTimestamp ?: it.series.lastUpdated }
+                .take(5)
+
+            val collected = linkedMapOf<Int, TvMazeShow>()
+            for (seed in seeds) {
+                val recs = api.getRecommendations(seed.series.id)
+                for (rec in recs) {
+                    if (rec.id !in savedIds && rec.id !in collected) {
+                        collected[rec.id] = rec
+                    }
+                }
+            }
+            Result.success(collected.values.toList().shuffled().take(20))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun searchRemoteSeries(query: String): Result<List<TvMazeShow>> {
         return try {
             val results = api.searchShows(query).map { it.show }
