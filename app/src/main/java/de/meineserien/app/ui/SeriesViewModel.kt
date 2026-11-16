@@ -156,6 +156,14 @@ class SeriesViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun migrateOldSeriesToGerman() {
+        viewModelScope.launch {
+            _statusMessage.value = "Stelle gespeicherte Serien auf Deutsch (TMDB) um..."
+            val count = repo.migrateAllSeriesToGermanTmdb()
+            _statusMessage.value = "$count Serie(n) erfolgreich auf Deutsch umgestellt!"
+        }
+    }
+
     suspend fun getBackupJson(): String = repo.exportBackupJson()
 
     fun restoreBackupJson(json: String) {

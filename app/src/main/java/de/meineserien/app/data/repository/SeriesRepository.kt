@@ -153,6 +153,76 @@ class SeriesRepository(
         return notifications
     }
 
+    suspend fun migrateAllSeriesToGermanTmdb(): Int {
+        val allLocal = dao.getAllSeriesOnce()
+        var migratedCount = 0
+
+        for (item in allLocal) {
+            try {
+                val results = api.searchShows(item.series.title).map { it.show }
+                if (results.isEmpty()) continue
+
+                val bestMatch = results.firstOrNull {
+                    it.premiered?.take(4) == item.series.premiereYear
+                } ?: results.first()
+
+                val remoteEpisodes = api.getEpisodes(bestMatch.id)
+                    .filter { it.number != null && it.season > 0 }
+                if (remoteEpisodes.isEmpty()) continue
+
+                val watchedMap = item.episodes
+                    .filter { it.isWatched }
+                    .associate { (it.season to it.number) to it.watchedTimestamp }
+
+                val latestStatus = api.getShowStatus(bestMatch.id) ?: item.series.status
+                val detectedProviders = if (item.series.streamingServices.isBlank() || item.series.streamingServices == "Andere Anbieter") {
+                    api.getGermanProviders(bestMatch.id).ifEmpty { listOf("Andere Anbieter") }.joinToString(",")
+                } else {
+                    item.series.streamingServices
+                }
+
+                val newSeries = SeriesEntity(
+                    id = bestMatch.id,
+                    title = bestMatch.name,
+                    premiereYear = bestMatch.premiered?.take(4) ?: item.series.premiereYear,
+                    network = item.series.network,
+                    coverUrl = bestMatch.image?.original ?: bestMatch.image?.medium ?: item.series.coverUrl,
+                    summary = bestMatch.summary?.replace(Regex("<.*?>"), "")?.trim().orEmpty().ifBlank { item.series.summary },
+                    status = latestStatus,
+                    streamingServices = detectedProviders,
+                    hasNewContentBadge = item.series.hasNewContentBadge,
+                    lastUpdated = System.currentTimeMillis()
+                )
+
+                val newEpisodes = remoteEpisodes.map { ep ->
+                    val epNum = ep.number ?: 0
+                    val key = ep.season to epNum
+                    val wasWatched = key in watchedMap
+                    EpisodeEntity(
+                        id = ep.id,
+                        seriesId = bestMatch.id,
+                        season = ep.season,
+                        number = epNum,
+                        title = ep.name.ifBlank { "Folge $epNum" },
+                        airDate = ep.airdate,
+                        isWatched = wasWatched,
+                        watchedTimestamp = if (wasWatched) watchedMap[key] else null
+                    )
+                }
+
+                if (bestMatch.id != item.series.id) {
+                    dao.deleteSeriesById(item.series.id)
+                }
+                dao.insertSeries(newSeries)
+                dao.insertEpisodesIgnore(newEpisodes)
+                newEpisodes.filter { it.isWatched }.forEach { dao.updateEpisode(it) }
+                migratedCount++
+            } catch (_: Exception) {
+            }
+        }
+        return migratedCount
+    }
+
     suspend fun exportBackupJson(): String {
         val data = dao.getAllSeriesOnce()
         return gson.toJson(BackupPayload(seriesList = data))

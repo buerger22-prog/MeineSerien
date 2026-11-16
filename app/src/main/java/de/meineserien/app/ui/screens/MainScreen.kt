@@ -85,6 +85,14 @@ fun MainScreen(
                                 }
                             )
                             DropdownMenuItem(
+                                text = { Text("Alte Serien auf Deutsch umstellen") },
+                                leadingIcon = { Icon(Icons.Default.Translate, null) },
+                                onClick = {
+                                    showBackupMenu = false
+                                    viewModel.migrateOldSeriesToGerman()
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Sicherung wiederherstellen") },
                                 leadingIcon = { Icon(Icons.Default.Download, null) },
                                 onClick = {
