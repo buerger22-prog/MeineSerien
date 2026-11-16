@@ -173,6 +173,30 @@ fun DetailScreen(
                     progress = { seasonProgress },
                     modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
                 )
+                if (seasonEpisodes.isNotEmpty()) {
+                    val allSeasonWatched = seasonWatched == seasonEpisodes.size
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = {
+                            if (allSeasonWatched) {
+                                seasonEpisodes.forEach { viewModel.toggleEpisode(it) }
+                            } else {
+                                seasonEpisodes.filter { !it.isWatched }.forEach { viewModel.toggleEpisode(it) }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (allSeasonWatched) Icons.Outlined.RadioButtonUnchecked else Icons.Filled.CheckCircle,
+                            contentDescription = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (allSeasonWatched) "Staffel $selectedSeason zurücksetzen" else "Alle Folgen dieser Staffel auswählen"
+                        )
+                    }
+                }
             }
 
             items(seasonEpisodes, key = { it.id }) { ep ->
