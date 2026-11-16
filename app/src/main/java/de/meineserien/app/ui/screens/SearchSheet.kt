@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -113,7 +114,7 @@ fun SearchSheet(
                                 selectedProviders = emptySet()
                                 isDetectingProviders = true
                                 showPendingProviderSelection = show
-                                kotlinx.coroutines.MainScope().launch {
+                                scope.launch {
                                     val detected = viewModel.detectProvidersForShow(show.id)
                                     selectedProviders = detected.toSet()
                                     isDetectingProviders = false
