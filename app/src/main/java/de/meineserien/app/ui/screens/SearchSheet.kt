@@ -312,8 +312,17 @@ fun SearchSheet(
                 ) {
                     EmbeddedYoutubePlayer(videoKey = previewDetails!!.trailerYoutubeKey!!)
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { playTrailerInApp = false }) {
-                        Text("Trailer schließen")
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(onClick = {
+                            val key = previewDetails!!.trailerYoutubeKey!!
+                            val url = "https://www.youtube.com/watch?v=$key"
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        }) {
+                            Text("In YouTube öffnen")
+                        }
+                        Button(onClick = { playTrailerInApp = false }) {
+                            Text("Trailer schließen")
+                        }
                     }
                 }
             }
@@ -362,7 +371,13 @@ fun SearchSheet(
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun EmbeddedYoutubePlayer(videoKey: String) {
-    val embedUrl = "https://www.youtube.com/embed/$videoKey?autoplay=1&playsinline=1&rel=0&modestbranding=1"
+    val embedUrl = "https://www.youtube-nocookie.com/embed/$videoKey?autoplay=1&playsinline=1&rel=0"
+    val html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">" +
+        "<style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}" +
+        "iframe{width:100%;height:100%;border:0}</style></head><body>" +
+        "<iframe src=\"$embedUrl\" referrerpolicy=\"strict-origin-when-cross-origin\" " +
+        "allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen\" " +
+        "allowfullscreen></iframe></body></html>"
     AndroidView(
         factory = { ctx ->
             WebView(ctx).apply {
@@ -370,14 +385,11 @@ fun EmbeddedYoutubePlayer(videoKey: String) {
                 setBackgroundColor(android.graphics.Color.BLACK)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                settings.loadWithOverviewMode = true
-                settings.useWideViewPort = true
                 settings.mediaPlaybackRequiresUserGesture = false
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                settings.userAgentString = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                 webChromeClient = WebChromeClient()
                 webViewClient = WebViewClient()
-                loadUrl(embedUrl)
+                loadDataWithBaseURL("https://www.youtube-nocookie.com", html, "text/html", "UTF-8", null)
             }
         },
         modifier = Modifier
