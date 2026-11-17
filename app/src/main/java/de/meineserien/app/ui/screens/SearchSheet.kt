@@ -62,7 +62,6 @@ fun SearchSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    if (!playTrailerInApp) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -248,7 +247,11 @@ fun SearchSheet(
                         Spacer(modifier = Modifier.height(14.dp))
                         if (details.trailerYoutubeKey != null) {
                             Button(
-                                onClick = { playTrailerInApp = true },
+                                onClick = {
+                                    val intent = Intent(context, de.meineserien.app.ui.TrailerPlayerActivity::class.java)
+                                    intent.putExtra("VIDEO_KEY", details.trailerYoutubeKey)
+                                    context.startActivity(intent)
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
@@ -298,38 +301,7 @@ fun SearchSheet(
         )
     }
 
-    }
-
-    if (playTrailerInApp && previewDetails?.trailerYoutubeKey != null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .zIndex(99f)
-                .background(androidx.compose.ui.graphics.Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                EmbeddedYoutubePlayer(videoKey = previewDetails!!.trailerYoutubeKey!!)
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = {
-                        val key = previewDetails!!.trailerYoutubeKey!!
-                        val url = "https://www.youtube.com/watch?v=$key"
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }) {
-                        Text("In YouTube öffnen")
-                    }
-                    Button(onClick = { playTrailerInApp = false }) {
-                        Text("Trailer schließen")
-                    }
-                }
-            }
-        }
-    }
+    
 
     showPendingProviderSelection?.let { chosenShow ->
         AlertDialog(
@@ -370,32 +342,3 @@ fun SearchSheet(
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-fun EmbeddedYoutubePlayer(videoKey: String) {
-    val embedUrl = "https://www.youtube-nocookie.com/embed/$videoKey?autoplay=1&playsinline=1&rel=0"
-    val html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">" +
-        "<style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}" +
-        "iframe{width:100%;height:100%;border:0}</style></head><body>" +
-        "<iframe src=\"$embedUrl\" referrerpolicy=\"strict-origin-when-cross-origin\" " +
-        "allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen\" " +
-        "allowfullscreen></iframe></body></html>"
-    AndroidView(
-        factory = { ctx ->
-            WebView(ctx).apply {
-                setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                setBackgroundColor(android.graphics.Color.BLACK)
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.mediaPlaybackRequiresUserGesture = false
-                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                webChromeClient = WebChromeClient()
-                webViewClient = WebViewClient()
-                loadDataWithBaseURL("https://www.youtube-nocookie.com", html, "text/html", "UTF-8", null)
-            }
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(16f / 9f)
-    )
-}
