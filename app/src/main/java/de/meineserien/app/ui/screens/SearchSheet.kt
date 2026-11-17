@@ -31,6 +31,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -61,7 +62,7 @@ fun SearchSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    if (!playTrailerInApp) { ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -195,7 +196,9 @@ fun SearchSheet(
         }
     }
 
-    previewShow?.let { targetShow ->
+    } }
+
+    if (!playTrailerInApp) { previewShow?.let { targetShow ->
         AlertDialog(
             onDismissRequest = { previewShow = null },
             title = { Text(text = targetShow.name, fontWeight = FontWeight.Bold) },
@@ -296,33 +299,33 @@ fun SearchSheet(
         )
     }
 
+    }
+
     if (playTrailerInApp && previewDetails?.trailerYoutubeKey != null) {
-        Dialog(
-            onDismissRequest = { playTrailerInApp = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(99f)
+                .background(androidx.compose.ui.graphics.Color.Black),
+            contentAlignment = Alignment.Center
         ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = androidx.compose.ui.graphics.Color.Black
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    EmbeddedYoutubePlayer(videoKey = previewDetails!!.trailerYoutubeKey!!)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = {
-                            val key = previewDetails!!.trailerYoutubeKey!!
-                            val url = "https://www.youtube.com/watch?v=$key"
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                        }) {
-                            Text("In YouTube öffnen")
-                        }
-                        Button(onClick = { playTrailerInApp = false }) {
-                            Text("Trailer schließen")
-                        }
+                EmbeddedYoutubePlayer(videoKey = previewDetails!!.trailerYoutubeKey!!)
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(onClick = {
+                        val key = previewDetails!!.trailerYoutubeKey!!
+                        val url = "https://www.youtube.com/watch?v=$key"
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }) {
+                        Text("In YouTube öffnen")
+                    }
+                    Button(onClick = { playTrailerInApp = false }) {
+                        Text("Trailer schließen")
                     }
                 }
             }
