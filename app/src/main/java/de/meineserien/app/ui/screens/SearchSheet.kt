@@ -62,7 +62,8 @@ fun SearchSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    if (!playTrailerInApp) { ModalBottomSheet(onDismissRequest = onDismiss) {
+    if (!playTrailerInApp) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -196,9 +197,7 @@ fun SearchSheet(
         }
     }
 
-    } }
-
-    if (!playTrailerInApp) { previewShow?.let { targetShow ->
+    previewShow?.let { targetShow ->
         AlertDialog(
             onDismissRequest = { previewShow = null },
             title = { Text(text = targetShow.name, fontWeight = FontWeight.Bold) },
